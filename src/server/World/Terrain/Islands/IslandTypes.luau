@@ -1,0 +1,3 @@
+local IslandTypes = {}
+
+return IslandTypes

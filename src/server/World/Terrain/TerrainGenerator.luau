@@ -1,4 +1,5 @@
-local Math = require(game.ReplicatedStorage.Shared.Math)
+local Math = require(game.ReplicatedStorage.Scripts.Math)
+local OceanFloor = require(script.Parent.OceanFloor)
 
 local TerrainGenerator = {}
 
@@ -30,17 +31,16 @@ local function GenerateIsland(Terrain, config)
 		)
 	)
 
-	local resolution = config.TERRAIN_RESOLUTION
-	local alignedRegion = region:ExpandToGrid(resolution)
+	local alignedRegion = region:ExpandToGrid(config.TERRAIN_RESOLUTION)
 
-	local materials, occupancy = Terrain:ReadVoxels(alignedRegion, resolution)
+	local materials, occupancy = Terrain:ReadVoxels(alignedRegion, config.TERRAIN_RESOLUTION)
 
 	local minPosition = alignedRegion.CFrame.Position - alignedRegion.Size / 2
 
 	for x = 1, #materials do
 		for z = 1, #materials[x][1] do
-			local worldX = minPosition.X + (x - 0.5) * resolution
-			local worldZ = minPosition.Z + (z - 0.5) * resolution
+			local worldX = minPosition.X + (x - 0.5) * config.TERRAIN_RESOLUTION
+			local worldZ = minPosition.Z + (z - 0.5) * config.TERRAIN_RESOLUTION
 
 			local distance = math.sqrt(worldX ^ 2 + worldZ ^ 2)
 
@@ -53,7 +53,7 @@ local function GenerateIsland(Terrain, config)
 				end
 
 				for y = 1, #materials[x] do
-					local worldY = minPosition.Y + (y - 0.5) * resolution
+					local worldY = minPosition.Y + (y - 0.5) * config.TERRAIN_RESOLUTION
 
 					if worldY <= surfaceHeight then
 						materials[x][y][z] = surfaceMaterial
@@ -67,7 +67,63 @@ local function GenerateIsland(Terrain, config)
 		end
 	end
 
-	Terrain:WriteVoxels(alignedRegion, resolution, materials, occupancy)
+	Terrain:WriteVoxels(alignedRegion, config.TERRAIN_RESOLUTION, materials, occupancy)
+end
+
+local function GenerateSeabedChunk(terrain, originX, originZ, config)
+	local chunkRegion = Region3.new(
+		Vector3.new(
+			originX,
+			config.SEA_LEVEL
+				- config.OCEAN_DEPTH
+				- config.SEABED_NOISE_AMPLITUDE
+				- config.SEABED_THICKNESS,
+			originZ
+		),
+		Vector3.new(
+			originX + config.SEABED_CHUNK_SIZE,
+			config.SEA_LEVEL,
+			originZ + config.SEABED_CHUNK_SIZE
+		)
+	)
+
+	chunkRegion = chunkRegion:ExpandToGrid(config.TERRAIN_RESOLUTION)
+	local regionMin = chunkRegion.CFrame.Position - chunkRegion.Size / 2
+
+	local voxelsPerAxis = chunkRegion.Size / config.TERRAIN_RESOLUTION
+	local materials = table.create(voxelsPerAxis.X)
+	local occupancy = table.create(voxelsPerAxis.X)
+
+	for x = 1, voxelsPerAxis.X do
+		local worldX = regionMin.X + (x - 0.5) * config.TERRAIN_RESOLUTION
+		materials[x] = table.create(voxelsPerAxis.Y)
+		occupancy[x] = table.create(voxelsPerAxis.Y)
+
+		for y = 1, voxelsPerAxis.Y do
+			local worldY = regionMin.Y + (y - 0.5) * config.TERRAIN_RESOLUTION
+			materials[x][y] = table.create(voxelsPerAxis.Z)
+			occupancy[x][y] = table.create(voxelsPerAxis.Z)
+
+			for z = 1, voxelsPerAxis.Z do
+				local worldZ = regionMin.Z + (z - 0.5) * config.TERRAIN_RESOLUTION
+
+				local surfaceHeight = OceanFloor.GetElevation(worldX, worldZ, config)
+				local voxelBottomY = worldY - config.TERRAIN_RESOLUTION / 2
+
+				local fillAmount =
+					math.clamp((surfaceHeight - voxelBottomY) / config.TERRAIN_RESOLUTION, 0, 1)
+
+				occupancy[x][y][z] = fillAmount
+				if fillAmount > 0 then
+					materials[x][y][z] = config.SEABED_MATERIAL
+				else
+					materials[x][y][z] = Enum.Material.Air
+				end
+			end
+		end
+	end
+
+	terrain:WriteVoxels(chunkRegion, config.TERRAIN_RESOLUTION, materials, occupancy)
 end
 
 function TerrainGenerator.Generate(config)
@@ -80,19 +136,16 @@ function TerrainGenerator.Generate(config)
 	Terrain.WaterWaveSize = config.WATER_WAVE_SIZE
 	Terrain.WaterWaveSpeed = config.WATER_WAVE_SPEED
 
-	Terrain:FillBlock(
-		CFrame.new(0, config.SEA_LEVEL - config.OCEAN_DEPTH - config.SEABED_THICKNESS / 2, 0),
-		Vector3.new(config.OCEAN_WIDTH, config.SEABED_THICKNESS, config.OCEAN_LENGTH),
-		config.SEABED_MATERIAL
-	)
+	local startPosition = -config.SEABED_TEST_SIZE / 2
+	local chunksPerAxis = config.SEABED_TEST_SIZE / config.SEABED_CHUNK_SIZE
 
-	Terrain:FillBlock(
-		CFrame.new(0, config.SEA_LEVEL - config.OCEAN_DEPTH / 2, 0),
-		Vector3.new(config.OCEAN_WIDTH, config.OCEAN_DEPTH, config.OCEAN_LENGTH),
-		config.WATER_MATERIAL
-	)
-
-	GenerateIsland(Terrain, config)
+	for x = 0, chunksPerAxis - 1 do
+		local originX = startPosition + x * config.SEABED_CHUNK_SIZE
+		for z = 0, chunksPerAxis - 1 do
+			local originZ = startPosition + z * config.SEABED_CHUNK_SIZE
+			GenerateSeabedChunk(Terrain, originX, originZ, config)
+		end
+	end
 end
 
 return TerrainGenerator

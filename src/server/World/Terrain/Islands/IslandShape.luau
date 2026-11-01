@@ -1,0 +1,3 @@
+local IslandShape = {}
+
+return IslandShape
