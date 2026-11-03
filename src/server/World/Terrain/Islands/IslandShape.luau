@@ -121,4 +121,28 @@ function IslandShape.GetBaseField(island, worldX, worldZ, config)
 	return baseField - coastlineDisplacement
 end
 
+function IslandShape.GetCoastlineDistance(island, worldX, worldZ, config, baseField)
+	local sampleDistance = config.TERRAIN_RESOLUTION
+
+	local gradientX = (
+		IslandShape.GetBaseField(island, worldX + sampleDistance, worldZ, config)
+		- IslandShape.GetBaseField(island, worldX - sampleDistance, worldZ, config)
+	) / (2 * sampleDistance)
+
+	local gradientZ = (
+		IslandShape.GetBaseField(island, worldX, worldZ + sampleDistance, config)
+		- IslandShape.GetBaseField(island, worldX, worldZ - sampleDistance, config)
+	) / (2 * sampleDistance)
+
+	local gradientMagnitude = math.sqrt(gradientX ^ 2 + gradientZ ^ 2)
+
+	if gradientMagnitude < 1e-6 then
+		return nil
+	end
+
+	local signedDistance = (baseField - 1) / gradientMagnitude
+
+	return signedDistance, gradientX / gradientMagnitude, gradientZ / gradientMagnitude
+end
+
 return IslandShape
