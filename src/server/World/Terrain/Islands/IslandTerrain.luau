@@ -17,7 +17,7 @@ function IslandTerrain.Generate(terrain, island, config)
 		- math.abs(config.SEABED_NOISE_AMPLITUDE)
 		- config.SEABED_THICKNESS
 
-	local maxY = config.SEA_LEVEL
+	local maxY = config.SEA_LEVEL + 1
 
 	local startX = math.floor(minX / resolution) * resolution
 	local startZ = math.floor(minZ / resolution) * resolution

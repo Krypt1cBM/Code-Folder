@@ -98,22 +98,23 @@ function IslandShape.GetBaseField(island, worldX, worldZ, config)
 
 	local baseField = field + baseNoise * config.ISLAND_BASE_NOISE_AMPLITUDE
 
-	local coastlineNoise =
-		Noise.GetWorley(normalizedX, normalizedZ, config.ISLAND_COAST_NOISE_CELL_SIZE, island.Seed)
-
 	local distanceFromCoast = baseField - 1
+
+	local sizeFade = math.clamp(-distanceFromCoast / config.ISLAND_COAST_NOISE_FADE_DISTANCE, 0, 1)
+
+	local cellSize = config.ISLAND_COASTLINE_CELL_SIZE
+		+ (config.ISLAND_COASTLINE_MIN_CELL_SIZE - config.ISLAND_COASTLINE_CELL_SIZE) * sizeFade
+
+	local coastlineNoise = Noise.GetWorley(normalizedX, normalizedZ, cellSize / radius, island.Seed)
 
 	local coastlineInfluence =
 		math.clamp(1 - math.abs(distanceFromCoast) / config.ISLAND_COAST_NOISE_FADE_DISTANCE, 0, 1)
 
-	local outwardInfluence =
-		math.clamp(distanceFromCoast / config.ISLAND_COAST_NOISE_FADE_DISTANCE, 0, 1)
-
-	local erosion = math.max(0, 0.5 - coastlineNoise)
-		* config.ISLAND_COAST_NOISE_AMPLITUDE
+	local coastlineDisplacement = math.max(0, 0.5 - coastlineNoise)
+		* config.ISLAND_COASTLINE_AMPLITUDE
 		* coastlineInfluence
 
-	return baseField + erosion * (1 + outwardInfluence)
+	return baseField - coastlineDisplacement
 end
 
 return IslandShape
